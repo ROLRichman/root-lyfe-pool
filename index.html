@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Root Lyfe Pool 🎱</title>
+<title>Root Lyfe Pool 🎱 PRO</title>
 
 <style>
 html, body {
@@ -14,9 +14,9 @@ html, body {
 }
 
 #gameContainer {
-  position:relative;
   width:100vw;
   height:100vh;
+  position:relative;
 }
 
 canvas {
@@ -26,14 +26,12 @@ canvas {
   background:#2e6f57;
 }
 
-/* UI */
 #ui {
   position:absolute;
   top:10px;
   width:100%;
   text-align:center;
   color:white;
-  z-index:10;
 }
 
 #powerBar {
@@ -48,28 +46,6 @@ canvas {
   height:100%;
   width:0%;
   background:linear-gradient(90deg,#22c55e,#facc15);
-}
-
-/* Cue spin ball */
-#spinControl {
-  position:absolute;
-  bottom:20px;
-  right:20px;
-  width:80px;
-  height:80px;
-  background:white;
-  border-radius:50%;
-  border:3px solid #333;
-}
-
-#spinDot {
-  position:absolute;
-  width:14px;
-  height:14px;
-  background:red;
-  border-radius:50%;
-  top:33px;
-  left:33px;
 }
 
 #shareBtn {
@@ -96,11 +72,6 @@ canvas {
     <div id="powerBar"><div id="powerFill"></div></div>
   </div>
 
-  <!-- Spin Control -->
-  <div id="spinControl">
-    <div id="spinDot"></div>
-  </div>
-
   <button id="shareBtn">Challenge Friend</button>
 </div>
 
@@ -111,9 +82,6 @@ const ctx = canvas.getContext('2d');
 const powerFill = document.getElementById('powerFill');
 const scoreBoard = document.getElementById('scoreBoard');
 
-const spinDot = document.getElementById('spinDot');
-const spinControl = document.getElementById('spinControl');
-
 let balls = [];
 let pockets = [];
 
@@ -121,11 +89,8 @@ let aiming = false;
 let pointer = {x:0,y:0};
 
 let power = 0;
-let maxPower = 80;
+let maxPower = 70;
 let score = 0;
-
-// 🎯 SPIN (ENGLISH)
-let spin = {x:0,y:0};
 
 // FULLSCREEN
 function resizeCanvas(){
@@ -135,17 +100,17 @@ function resizeCanvas(){
 window.addEventListener('resize', ()=>{ resizeCanvas(); initGame(); });
 resizeCanvas();
 
-// INIT
+// INIT GAME
 function initGame(){
   balls = [];
-  const R = 16;
+  const R = 14;
 
   balls.push({
     x:canvas.width*0.25,
     y:canvas.height/2,
-    dx:0,dy:0,
-    color:'white',
+    dx:0, dy:0,
     r:R,
+    color:'white',
     id:0
   });
 
@@ -161,8 +126,8 @@ function initGame(){
         x:startX+row*(R*2),
         y:startY-row*R + col*(R*2),
         dx:0,dy:0,
-        color:colors[index%colors.length],
         r:R,
+        color:colors[index%colors.length],
         id:index+1
       });
       index++;
@@ -176,59 +141,102 @@ function initGame(){
 }
 initGame();
 
+// HELPERS
 function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 
-// PHYSICS
+function ballsStopped(){
+  return balls.every(b => b.dx === 0 && b.dy === 0);
+}
+
+// 🎯 REAL COLLISION
+function resolveCollision(a,b){
+  let dx = b.x - a.x;
+  let dy = b.y - a.y;
+  let distAB = Math.hypot(dx,dy);
+  if(distAB === 0) return;
+
+  let nx = dx/distAB;
+  let ny = dy/distAB;
+
+  let vx = a.dx - b.dx;
+  let vy = a.dy - b.dy;
+
+  let speed = vx*nx + vy*ny;
+  if(speed > 0) return;
+
+  let impulse = 1.9 * speed;
+
+  a.dx -= impulse * nx;
+  a.dy -= impulse * ny;
+  b.dx += impulse * nx;
+  b.dy += impulse * ny;
+
+  // separate overlap
+  let overlap = a.r + b.r - distAB;
+  a.x -= overlap * nx/2;
+  a.y -= overlap * ny/2;
+  b.x += overlap * nx/2;
+  b.y += overlap * ny/2;
+}
+
+// UPDATE
 function update(){
   balls.forEach(b=>{
     b.x += b.dx;
     b.y += b.dy;
 
-    // REALISTIC FRICTION
-    b.dx *= 0.99;
-    b.dy *= 0.99;
+    // friction
+    b.dx *= 0.985;
+    b.dy *= 0.985;
 
-    // APPLY SPIN (CURVE EFFECT)
-    if(b.id===0){
-      b.dx += spin.x * 0.02;
-      b.dy += spin.y * 0.02;
+    if(Math.abs(b.dx)<0.05) b.dx=0;
+    if(Math.abs(b.dy)<0.05) b.dy=0;
+
+    // 🔥 REALISTIC RAIL BOUNCE
+    if(b.x < b.r){
+      b.x = b.r;
+      b.dx *= -0.9;
+    }
+    if(b.x > canvas.width - b.r){
+      b.x = canvas.width - b.r;
+      b.dx *= -0.9;
+    }
+    if(b.y < b.r){
+      b.y = b.r;
+      b.dy *= -0.9;
+    }
+    if(b.y > canvas.height - b.r){
+      b.y = canvas.height - b.r;
+      b.dy *= -0.9;
     }
 
-    if(Math.abs(b.dx)<0.02) b.dx=0;
-    if(Math.abs(b.dy)<0.02) b.dy=0;
-
-    if(b.x<b.r||b.x>canvas.width-b.r) b.dx*=-0.9;
-    if(b.y<b.r||b.y>canvas.height-b.r) b.dy*=-0.9;
-
+    // pockets
     pockets.forEach(p=>{
-      if(dist(b,p)<24 && b.id!==0){
-        b.x=-100;
-        b.y=-100;
-        b.dx=b.dy=0;
+      if(dist(b,p) < 24){
+
+        if(b.id === 0){
+          // cue ball reset
+          b.x = canvas.width*0.25;
+          b.y = canvas.height/2;
+          b.dx = 0;
+          b.dy = 0;
+          return;
+        }
+
+        b.x = -100;
+        b.y = -100;
+        b.dx = b.dy = 0;
+
         score++;
-        scoreBoard.innerText="Score: "+score;
+        scoreBoard.innerText = "Score: " + score;
       }
     });
   });
 
-  // COLLISION (MORE REAL)
+  // collisions
   for(let i=0;i<balls.length;i++){
     for(let j=i+1;j<balls.length;j++){
-      let a=balls[i],b=balls[j];
-      let d=dist(a,b);
-
-      if(d<a.r+b.r){
-        let angle=Math.atan2(b.y-a.y,b.x-a.x);
-        let speed = 0.9;
-
-        let vx = Math.cos(angle)*speed;
-        let vy = Math.sin(angle)*speed;
-
-        a.dx -= vx;
-        a.dy -= vy;
-        b.dx += vx;
-        b.dy += vy;
-      }
+      resolveCollision(balls[i], balls[j]);
     }
   }
 
@@ -260,11 +268,11 @@ function draw(){
     ctx.fill();
   });
 
-  // AIM LINE
+  // aim line
   if(aiming){
-    let dx = balls[0].x - pointer.x;
-    let dy = balls[0].y - pointer.y;
-    let angle = Math.atan2(dy, dx);
+    let dx = pointer.x - balls[0].x;
+    let dy = pointer.y - balls[0].y;
+    let angle = Math.atan2(dy,dx);
 
     ctx.beginPath();
     ctx.moveTo(balls[0].x, balls[0].y);
@@ -294,6 +302,7 @@ function getPos(e){
 }
 
 canvas.addEventListener('mousedown', e=>{
+  if(!ballsStopped()) return;
   aiming=true;
   power=0;
   pointer=getPos(e);
@@ -306,6 +315,7 @@ canvas.addEventListener('mousemove', e=>{
 canvas.addEventListener('mouseup', shoot);
 
 canvas.addEventListener('touchstart', e=>{
+  if(!ballsStopped()) return;
   aiming=true;
   power=0;
   pointer=getPos(e);
@@ -319,45 +329,34 @@ canvas.addEventListener('touchend', shoot);
 
 // SHOOT
 function shoot(){
+  if(!aiming) return;
   aiming=false;
 
-  let dx = balls[0].x - pointer.x;
-  let dy = balls[0].y - pointer.y;
-  let angle = Math.atan2(dy, dx);
+  let dx = pointer.x - balls[0].x;
+  let dy = pointer.y - balls[0].y;
 
-  let strength = power * 0.8;
+  let dist = Math.hypot(dx,dy);
+  if(dist===0) return;
 
-  balls[0].dx = Math.cos(angle)*strength;
-  balls[0].dy = Math.sin(angle)*strength;
+  let nx = dx/dist;
+  let ny = dy/dist;
 
-  power=0;
-  powerFill.style.width="0%";
+  let strength = power * 0.25;
+
+  balls[0].dx = nx * strength;
+  balls[0].dy = ny * strength;
+
+  power = 0;
+  powerFill.style.width = "0%";
 }
 
 // POWER BUILD
 setInterval(()=>{
   if(aiming){
-    power = Math.min(power+1.5, maxPower);
-    powerFill.style.width=(power/maxPower*100)+"%";
+    power = Math.min(power+1.2, maxPower);
+    powerFill.style.width = (power/maxPower*100)+"%";
   }
 },16);
-
-// 🎯 SPIN CONTROL
-spinControl.addEventListener('touchmove', e=>{
-  const rect = spinControl.getBoundingClientRect();
-
-  let x = e.touches[0].clientX - rect.left - 40;
-  let y = e.touches[0].clientY - rect.top - 40;
-
-  x = Math.max(-30, Math.min(30, x));
-  y = Math.max(-30, Math.min(30, y));
-
-  spinDot.style.left = (40 + x - 7) + "px";
-  spinDot.style.top  = (40 + y - 7) + "px";
-
-  spin.x = x/30;
-  spin.y = y/30;
-});
 
 // SHARE
 document.getElementById('shareBtn').onclick=()=>{
