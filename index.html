@@ -9,32 +9,41 @@ html, body {
   margin:0;
   padding:0;
   background:#0b0f1a;
+  overflow:hidden;
   font-family:Arial;
 }
 
 #gameContainer {
-  width:100%;
-  max-width:1000px;
-  margin:auto;
-  text-align:center;
+  position:relative;
+  width:100vw;
+  height:100vh;
 }
 
 canvas {
   width:100%;
+  height:100%;
   display:block;
-  border-radius:12px;
   background:#2e6f57;
 }
 
-#scoreBoard {
+/* UI overlay INSIDE game */
+#ui {
+  position:absolute;
+  top:10px;
+  left:0;
+  width:100%;
+  text-align:center;
   color:white;
-  margin:10px;
+  z-index:10;
+}
+
+#scoreBoard {
   font-size:18px;
 }
 
 #powerBar {
-  width:80%;
-  height:12px;
+  width:60%;
+  height:10px;
   background:#333;
   margin:10px auto;
   border-radius:6px;
@@ -47,14 +56,16 @@ canvas {
   background:#22c55e;
 }
 
-button {
+#shareBtn {
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
   padding:10px 20px;
-  margin:10px;
   border:none;
   border-radius:8px;
   background:#22c55e;
   font-weight:bold;
-  cursor:pointer;
 }
 </style>
 </head>
@@ -63,9 +74,13 @@ button {
 
 <div id="gameContainer">
   <canvas id="poolCanvas"></canvas>
-  <div id="scoreBoard">Score: 0</div>
-  <div id="powerBar"><div id="powerFill"></div></div>
-  <button id="shareBtn">Challenge a Friend</button>
+
+  <div id="ui">
+    <div id="scoreBoard">Score: 0</div>
+    <div id="powerBar"><div id="powerFill"></div></div>
+  </div>
+
+  <button id="shareBtn">Challenge Friend</button>
 </div>
 
 <script>
@@ -74,48 +89,42 @@ const ctx = canvas.getContext('2d');
 
 const scoreBoard = document.getElementById('scoreBoard');
 const powerFill = document.getElementById('powerFill');
-const shareBtn = document.getElementById('shareBtn');
 
 let balls = [];
 let pockets = [];
-let mouse = {x:0,y:0};
 let aiming = false;
 let power = 0;
-let maxPower = 25;
+let maxPower = 30;
 let score = 0;
 
-// 🔥 RESPONSIVE CANVAS (FIXED PERFECTLY)
-function resizeCanvas(){
-  const w = canvas.parentElement.offsetWidth;
-  const h = window.innerHeight * 0.75;
+let pointer = {x:0,y:0};
 
-  canvas.width = w;
-  canvas.height = Math.min(w * 0.8, h);
+// 🔥 FULLSCREEN CANVAS
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 }
 window.addEventListener('resize', ()=>{ resizeCanvas(); initGame(); });
 resizeCanvas();
 
-// 🎱 INIT GAME
+// 🎱 INIT
 function initGame(){
   balls = [];
 
-  // cue ball
-  balls.push({x:150, y:canvas.height/2, dx:0, dy:0, color:'white', r:10, id:0});
+  balls.push({x:canvas.width*0.25,y:canvas.height/2,dx:0,dy:0,color:'white',r:10,id:0});
 
-  // rack
   let colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
-  let startX = canvas.width * 0.7;
+  let startX = canvas.width*0.75;
   let startY = canvas.height/2;
 
-  let index = 0;
-  for(let row=0; row<4; row++){
-    for(let col=0; col<=row; col++){
+  let index=0;
+  for(let row=0;row<4;row++){
+    for(let col=0;col<=row;col++){
       balls.push({
-        x:startX + row*20,
-        y:startY - row*10 + col*20,
-        dx:0,
-        dy:0,
-        color:colors[index % colors.length],
+        x:startX+row*20,
+        y:startY-row*10+col*20,
+        dx:0,dy:0,
+        color:colors[index%colors.length],
         r:10,
         id:index+1
       });
@@ -130,85 +139,23 @@ function initGame(){
 }
 initGame();
 
-// helper
-function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 
-// 🎯 COLLISION (SMOOTH + CONTROLLED)
-function collisions(){
-  for(let i=0;i<balls.length;i++){
-    for(let j=i+1;j<balls.length;j++){
-      let a = balls[i], b = balls[j];
-      let d = dist(a,b);
-
-      if(d < a.r + b.r){
-        let angle = Math.atan2(b.y-a.y, b.x-a.x);
-        let force = 0.4;
-
-        let vx = Math.cos(angle)*force;
-        let vy = Math.sin(angle)*force;
-
-        a.dx -= vx;
-        a.dy -= vy;
-        b.dx += vx;
-        b.dy += vy;
-      }
-    }
-  }
-}
-
-// 🎨 DRAW
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // table
-  ctx.fillStyle="#2e6f57";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  // pockets
-  pockets.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,18,0,Math.PI*2);
-    ctx.fillStyle="black";
-    ctx.fill();
-  });
-
-  // balls
-  balls.forEach(b=>{
-    ctx.beginPath();
-    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-    ctx.fillStyle=b.color;
-    ctx.fill();
-  });
-
-  // aim line
-  if(aiming){
-    ctx.beginPath();
-    ctx.moveTo(balls[0].x, balls[0].y);
-    ctx.lineTo(mouse.x, mouse.y);
-    ctx.strokeStyle="white";
-    ctx.lineWidth=2;
-    ctx.stroke();
-  }
-}
-
-// ⚙️ PHYSICS ENGINE (REALISTIC)
+// physics
 function update(){
   balls.forEach(b=>{
-    b.x += b.dx;
-    b.y += b.dy;
+    b.x+=b.dx;
+    b.y+=b.dy;
 
-    // friction
-    b.dx *= 0.96;
-    b.dy *= 0.96;
+    b.dx*=0.96;
+    b.dy*=0.96;
 
     if(Math.abs(b.dx)<0.05) b.dx=0;
     if(Math.abs(b.dy)<0.05) b.dy=0;
 
-    // walls
-    if(b.x < b.r || b.x > canvas.width - b.r) b.dx *= -0.8;
-    if(b.y < b.r || b.y > canvas.height - b.r) b.dy *= -0.8;
+    if(b.x<b.r||b.x>canvas.width-b.r) b.dx*=-0.8;
+    if(b.y<b.r||b.y>canvas.height-b.r) b.dy*=-0.8;
 
-    // pockets
     pockets.forEach(p=>{
       if(dist(b,p)<18 && b.id!==0){
         b.x=-100; b.y=-100;
@@ -219,50 +166,130 @@ function update(){
     });
   });
 
-  collisions();
+  // collisions
+  for(let i=0;i<balls.length;i++){
+    for(let j=i+1;j<balls.length;j++){
+      let a=balls[i],b=balls[j];
+      let d=dist(a,b);
+
+      if(d<a.r+b.r){
+        let angle=Math.atan2(b.y-a.y,b.x-a.x);
+        let force=0.4;
+
+        a.dx-=Math.cos(angle)*force;
+        a.dy-=Math.sin(angle)*force;
+        b.dx+=Math.cos(angle)*force;
+        b.dy+=Math.sin(angle)*force;
+      }
+    }
+  }
+
   draw();
   requestAnimationFrame(update);
 }
 update();
 
-// 🎮 CONTROLS (SMOOTH POWER SYSTEM)
-canvas.addEventListener('mousemove', e=>{
+// draw
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle="#2e6f57";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  pockets.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,18,0,Math.PI*2);
+    ctx.fillStyle="black";
+    ctx.fill();
+  });
+
+  balls.forEach(b=>{
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fillStyle=b.color;
+    ctx.fill();
+  });
+
+  if(aiming){
+    ctx.beginPath();
+    ctx.moveTo(balls[0].x,balls[0].y);
+    ctx.lineTo(pointer.x,pointer.y);
+    ctx.strokeStyle="white";
+    ctx.stroke();
+  }
+}
+
+// 🎯 TOUCH + MOUSE SUPPORT (THIS FIXES YOUR ISSUE)
+function getPos(e){
   const rect = canvas.getBoundingClientRect();
-  mouse.x = e.clientX - rect.left;
-  mouse.y = e.clientY - rect.top;
+  if(e.touches){
+    return {
+      x:e.touches[0].clientX - rect.left,
+      y:e.touches[0].clientY - rect.top
+    };
+  }
+  return {
+    x:e.clientX - rect.left,
+    y:e.clientY - rect.top
+  };
+}
+
+canvas.addEventListener('mousedown', e=>{
+  aiming=true;
+  power=0;
+  pointer=getPos(e);
 });
 
-canvas.addEventListener('mousedown', ()=>{
-  aiming = true;
-  power = 0;
+canvas.addEventListener('mousemove', e=>{
+  if(aiming) pointer=getPos(e);
 });
 
 canvas.addEventListener('mouseup', ()=>{
-  aiming = false;
-
-  let dx = balls[0].x - mouse.x;
-  let dy = balls[0].y - mouse.y;
-  let angle = Math.atan2(dy, dx);
-
-  balls[0].dx = Math.cos(angle) * power * 0.5;
-  balls[0].dy = Math.sin(angle) * power * 0.5;
-
-  power = 0;
-  powerFill.style.width="0%";
+  shoot();
 });
 
-// hold to charge
+// ✅ TOUCH EVENTS (FIXED MOBILE)
+canvas.addEventListener('touchstart', e=>{
+  aiming=true;
+  power=0;
+  pointer=getPos(e);
+});
+
+canvas.addEventListener('touchmove', e=>{
+  pointer=getPos(e);
+});
+
+canvas.addEventListener('touchend', ()=>{
+  shoot();
+});
+
+function shoot(){
+  aiming=false;
+
+  let dx=balls[0].x-pointer.x;
+  let dy=balls[0].y-pointer.y;
+
+  let angle=Math.atan2(dy,dx);
+
+  balls[0].dx=Math.cos(angle)*power*0.4;
+  balls[0].dy=Math.sin(angle)*power*0.4;
+
+  power=0;
+  powerFill.style.width="0%";
+}
+
+// power charge
 setInterval(()=>{
   if(aiming){
-    power = Math.min(power + 0.5, maxPower);
-    powerFill.style.width = (power/maxPower*100)+"%";
+    power=Math.min(power+0.7,maxPower);
+    powerFill.style.width=(power/maxPower*100)+"%";
   }
 },16);
 
-// 🔗 SHARE
-shareBtn.addEventListener('click', ()=>{
-  prompt("Challenge a friend:", window.location.href);
-});
+// share
+document.getElementById('shareBtn').onclick=()=>{
+  prompt("Send this to your friend:", window.location.href);
+};
 </script>
 
 </body>
