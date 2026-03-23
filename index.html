@@ -4,60 +4,73 @@
 <meta charset="UTF-8">
 <title>Root Lyfe Pool 🎱</title>
 <style>
-body { background: #222; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; }
-canvas { cursor: crosshair; border:2px solid #222; background:#35654d; }
-#score { color:#fff; font-size:18px; margin-top:10px; text-align:center; }
-#powerBar { width: 200px; height: 15px; background:#444; margin:10px auto; border-radius:5px; overflow:hidden;}
-#powerFill { width:0%; height:100%; background:#ff0;}
+html, body { margin:0; padding:0; background:#222; height:100%; }
+#gameContainer { position:relative; width:100%; max-width:900px; margin:auto; }
+#poolCanvas { width:100%; height:auto; display:block; background:#35654d; border:2px solid #222; }
+#scoreBoard { color:#fff; text-align:center; margin:10px 0; font-family:sans-serif; font-size:18px; }
+#powerBar { width:80%; height:15px; background:#444; margin:10px auto; border-radius:5px; overflow:hidden; }
+#powerFill { width:0%; height:100%; background:#ff0; }
+button { padding:8px 16px; margin:5px; font-size:16px; cursor:pointer; }
 </style>
 </head>
 <body>
-<div>
-<canvas id="poolTable" width="800" height="400"></canvas>
-<div id="score">Score: 0</div>
-<div id="powerBar"><div id="powerFill"></div></div>
-<audio id="hitSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
-<audio id="pocketSound" src="https://www.soundjay.com/buttons/sounds/button-3.mp3"></audio>
+<div id="gameContainer">
+  <canvas id="poolCanvas"></canvas>
+  <div id="scoreBoard">Score: 0</div>
+  <div id="powerBar"><div id="powerFill"></div></div>
+  <div style="text-align:center;">
+    <button id="shareBtn">Challenge a Friend</button>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/uuid@9.0.0/dist/umd/uuidv4.min.js"></script>
 <script>
-const canvas = document.getElementById('poolTable');
+const canvas = document.getElementById('poolCanvas');
 const ctx = canvas.getContext('2d');
-const radius = 12;
-let score = 0;
+const scoreBoard = document.getElementById('scoreBoard');
+const powerFill = document.getElementById('powerFill');
+const shareBtn = document.getElementById('shareBtn');
+
+let balls = [];
+let pockets = [];
+let mouse = {x:0, y:0};
+let isAiming = false;
 let power = 0;
+let score = 0;
 
-const hitSound = document.getElementById('hitSound');
-const pocketSound = document.getElementById('pocketSound');
-
-// pockets
-const pockets = [
-  {x:0, y:0}, {x:canvas.width/2, y:0}, {x:canvas.width, y:0},
-  {x:0, y:canvas.height}, {x:canvas.width/2, y:canvas.height}, {x:canvas.width, y:canvas.height}
-];
-
-// balls
-const balls = [];
-balls.push({x:150, y:200, dx:0, dy:0, color:'white', number:0});
-const colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
-
-for(let i=0;i<8;i++){
-  balls.push({x:500+i*15, y:200, dx:0, dy:0, color:colors[i], number:i+1});
+// Resize canvas to container
+function resizeCanvas(){
+  canvas.width = canvas.parentElement.offsetWidth;
+  canvas.height = canvas.width * 0.5;
 }
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-let isAiming=false;
-let mouse={x:0,y:0};
+// Initialize balls and pockets
+function initGame(){
+  balls = [{x:150, y:canvas.height/2, dx:0, dy:0, color:'white', number:0}];
+  const colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
+  for(let i=0;i<8;i++){
+    balls.push({x:500+i*15, y:canvas.height/2, dx:0, dy:0, color:colors[i], number:i+1});
+  }
+  pockets = [
+    {x:0, y:0}, {x:canvas.width/2, y:0}, {x:canvas.width, y:0},
+    {x:0, y:canvas.height}, {x:canvas.width/2, y:canvas.height}, {x:canvas.width, y:canvas.height}
+  ];
+}
+initGame();
 
-// helpers
-function distance(b1,b2){ return Math.hypot(b1.x-b2.x,b1.y-b2.y); }
+// Distance helper
+function distance(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
 
+// Collision
 function handleCollisions(){
   for(let i=0;i<balls.length;i++){
     for(let j=i+1;j<balls.length;j++){
-      let b1=balls[i],b2=balls[j];
+      let b1=balls[i], b2=balls[j];
       let dist=distance(b1,b2);
-      if(dist<radius*2){
-        let angle=Math.atan2(b2.y-b1.y,b2.x-b1.x);
+      if(dist<12*2){
+        let angle=Math.atan2(b2.y-b1.y, b2.x-b1.x);
         let totalV=Math.hypot(b1.dx-b2.dx,b1.dy-b2.dy);
         b1.dx=-totalV*Math.cos(angle)*0.9;
         b1.dy=-totalV*Math.sin(angle)*0.9;
@@ -68,10 +81,9 @@ function handleCollisions(){
   }
 }
 
-// draw
+// Draw
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
   // pockets
   pockets.forEach(p=>{
     ctx.beginPath();
@@ -80,118 +92,86 @@ function draw(){
     ctx.fill();
     ctx.closePath();
   });
-
   // balls
   balls.forEach(ball=>{
     ctx.beginPath();
-    ctx.arc(ball.x,ball.y,radius,0,Math.PI*2);
+    ctx.arc(ball.x,ball.y,12,0,Math.PI*2);
     ctx.fillStyle=ball.color;
     ctx.fill();
     ctx.strokeStyle='black';
     ctx.stroke();
     ctx.closePath();
   });
-
-  // cue
+  // cue line
   if(isAiming){
     ctx.beginPath();
     ctx.moveTo(balls[0].x, balls[0].y);
     ctx.lineTo(mouse.x, mouse.y);
-    ctx.strokeStyle='#fff';
+    ctx.strokeStyle='white';
     ctx.lineWidth=4;
     ctx.stroke();
-    ctx.closePath();
   }
 }
 
-// update
+// Update physics
 function update(){
   balls.forEach(ball=>{
     ball.x += ball.dx;
     ball.y += ball.dy;
     ball.dx *=0.98;
     ball.dy *=0.98;
-
-    // walls
-    if(ball.x<radius || ball.x>canvas.width-radius) ball.dx*=-1;
-    if(ball.y<radius || ball.y>canvas.height-radius) ball.dy*=-1;
-
+    // wall bounce
+    if(ball.x<12 || ball.x>canvas.width-12) ball.dx*=-1;
+    if(ball.y<12 || ball.y>canvas.height-12) ball.dy*=-1;
     // pockets
     pockets.forEach(p=>{
       if(distance(ball,p)<20 && ball.number!==0){
         ball.x=-100; ball.y=-100; ball.dx=0; ball.dy=0;
         score++;
-        document.getElementById('score').innerText = "Score: "+score;
-        pocketSound.play();
+        scoreBoard.innerText = "Score: "+score;
+        // TODO: send score to leaderboard backend
       }
     });
   });
-
   handleCollisions();
   draw();
   requestAnimationFrame(update);
 }
+update();
 
-// mouse
+// Mouse / touch
 canvas.addEventListener('mousemove', e=>{
   const rect = canvas.getBoundingClientRect();
   mouse.x=e.clientX-rect.left;
   mouse.y=e.clientY-rect.top;
 });
-
-canvas.addEventListener('mousedown', ()=>{
-  isAiming=true;
-  power=0;
-});
-
+canvas.addEventListener('mousedown', ()=>{ isAiming=true; power=0; });
 canvas.addEventListener('mouseup', ()=>{
   isAiming=false;
   let dx = balls[0].x - mouse.x;
   let dy = balls[0].y - mouse.y;
   balls[0].dx = dx*0.02*power;
   balls[0].dy = dy*0.02*power;
-  hitSound.play();
   power=0;
-  document.getElementById('powerFill').style.width = "0%";
+  powerFill.style.width="0%";
 });
-
 canvas.addEventListener('mousemove', ()=>{
   if(isAiming){
-    power = Math.min(power + 1, 100);
-    document.getElementById('powerFill').style.width = power + '%';
+    power = Math.min(power+1,100);
+    powerFill.style.width=power+"%";
   }
 });
 
-// touch
-canvas.addEventListener('touchstart', e=>{
-  isAiming=true;
-  power=0;
-  e.preventDefault();
+// Share / Challenge
+shareBtn.addEventListener('click', ()=>{
+  const roomID = uuidv4();
+  const url = `${window.location.origin}${window.location.pathname}?room=${roomID}`;
+  prompt("Share this link with a friend to play:", url);
 });
 
-canvas.addEventListener('touchmove', e=>{
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = e.touches[0].clientX - rect.left;
-  mouse.y = e.touches[0].clientY - rect.top;
-
-  if(isAiming){
-    power = Math.min(power + 1, 100);
-    document.getElementById('powerFill').style.width = power + '%';
-  }
-});
-
-canvas.addEventListener('touchend', ()=>{
-  isAiming=false;
-  let dx = balls[0].x - mouse.x;
-  let dy = balls[0].y - mouse.y;
-  balls[0].dx = dx*0.02*power;
-  balls[0].dy = dy*0.02*power;
-  hitSound.play();
-  power=0;
-  document.getElementById('powerFill').style.width = "0%";
-});
-
-update();
+// TODO: WebSocket / leaderboard integration
 </script>
 </body>
 </html>
+
+Replace old pool game with universal responsive version
