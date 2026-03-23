@@ -3,137 +3,83 @@
 <head>
 <meta charset="UTF-8">
 <title>Root Lyfe Pool 🎱 PRO</title>
-
 <style>
 html, body {
-  margin:0;
-  padding:0;
-  background:#0b0f1a;
-  overflow:hidden;
-  font-family:Arial;
+  margin:0; padding:0; background:#0b0f1a; overflow:hidden; font-family:Arial;
 }
-
-#gameContainer {
-  width:100vw;
-  height:100vh;
-  position:relative;
-}
-
-canvas {
-  width:100%;
-  height:100%;
-  display:block;
-  background:#2e6f57;
-}
-
-#ui {
-  position:absolute;
-  top:10px;
-  width:100%;
-  text-align:center;
-  color:white;
-}
-
-#powerBar {
-  width:60%;
-  height:12px;
-  background:#222;
-  margin:10px auto;
-  border-radius:6px;
-}
-
-#powerFill {
-  height:100%;
-  width:0%;
-  background:linear-gradient(90deg,#22c55e,#facc15);
-}
-
-#shareBtn {
-  position:absolute;
-  bottom:20px;
-  left:50%;
-  transform:translateX(-50%);
-  padding:10px 20px;
-  background:#22c55e;
-  border:none;
-  border-radius:8px;
-  font-weight:bold;
-}
+#gameContainer { width:100vw; height:100vh; position:relative; }
+canvas { width:100%; height:100%; display:block; background:#2e6f57; }
+#ui { position:absolute; top:10px; width:100%; text-align:center; color:white; }
+#powerBar { width:60%; height:12px; background:#222; margin:10px auto; border-radius:6px; }
+#powerFill { height:100%; width:0%; background:linear-gradient(90deg,#22c55e,#facc15); }
+#shareBtn { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 20px; background:#22c55e; border:none; border-radius:8px; font-weight:bold; }
 </style>
 </head>
-
 <body>
-
 <div id="gameContainer">
   <canvas id="poolCanvas"></canvas>
-
   <div id="ui">
     <div id="scoreBoard">Score: 0</div>
     <div id="powerBar"><div id="powerFill"></div></div>
   </div>
-
   <button id="shareBtn">Challenge Friend</button>
 </div>
 
 <script>
 const canvas = document.getElementById('poolCanvas');
 const ctx = canvas.getContext('2d');
-
 const powerFill = document.getElementById('powerFill');
 const scoreBoard = document.getElementById('scoreBoard');
 
 let balls = [];
 let pockets = [];
-
 let aiming = false;
 let pointer = {x:0,y:0};
-
 let power = 0;
 let maxPower = 70;
 let score = 0;
 
-// FULLSCREEN
-function resizeCanvas(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+// ----------------- FULLSCREEN -----------------
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', ()=>{ resizeCanvas(); initGame(); });
 resizeCanvas();
 
-// INIT GAME
+// ----------------- INIT GAME -----------------
 function initGame(){
   balls = [];
+  score = 0;
+  scoreBoard.innerText = "Score: " + score;
+
   const R = 14;
+  const spacing = R*2 + 1;
 
-  balls.push({
-    x:canvas.width*0.25,
-    y:canvas.height/2,
-    dx:0, dy:0,
-    r:R,
-    color:'white',
-    id:0
-  });
+  // Cue ball
+  balls.push({ x: canvas.width*0.25, y: canvas.height/2, dx:0, dy:0, r:R, color:'white', id:0, potted:false });
 
-  let colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
+  // Rack colors
+  const colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
 
   let startX = canvas.width*0.75;
   let startY = canvas.height/2;
+  let index = 0;
 
-  let index=0;
-  for(let row=0;row<5;row++){
-    for(let col=0;col<=row;col++){
+  // Rack layout with spacing
+  for(let row=0; row<5; row++){
+    for(let col=0; col<=row; col++){
       balls.push({
-        x:startX+row*(R*2),
-        y:startY-row*R + col*(R*2),
-        dx:0,dy:0,
+        x: startX + row*spacing,
+        y: startY - row*R + col*spacing,
+        dx:0, dy:0,
         r:R,
-        color:colors[index%colors.length],
-        id:index+1
+        color: colors[index % colors.length],
+        id: index+1,
+        potted:false
       });
       index++;
     }
   }
 
+  // Pockets
   pockets = [
     {x:0,y:0},{x:canvas.width/2,y:0},{x:canvas.width,y:0},
     {x:0,y:canvas.height},{x:canvas.width/2,y:canvas.height},{x:canvas.width,y:canvas.height}
@@ -141,14 +87,11 @@ function initGame(){
 }
 initGame();
 
-// HELPERS
-function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+// ----------------- HELPERS -----------------
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function ballsStopped(){ return balls.every(b=>b.dx===0 && b.dy===0); }
 
-function ballsStopped(){
-  return balls.every(b => b.dx === 0 && b.dy === 0);
-}
-
-// 🎯 REAL COLLISION
+// ----------------- COLLISION -----------------
 function resolveCollision(a,b){
   let dx = b.x - a.x;
   let dy = b.y - a.y;
@@ -165,75 +108,50 @@ function resolveCollision(a,b){
   if(speed > 0) return;
 
   let impulse = 1.9 * speed;
-
   a.dx -= impulse * nx;
   a.dy -= impulse * ny;
   b.dx += impulse * nx;
   b.dy += impulse * ny;
 
-  // separate overlap
+  // Separate overlap
   let overlap = a.r + b.r - distAB;
-  a.x -= overlap * nx/2;
-  a.y -= overlap * ny/2;
-  b.x += overlap * nx/2;
-  b.y += overlap * ny/2;
+  a.x -= overlap*nx/2;
+  a.y -= overlap*ny/2;
+  b.x += overlap*nx/2;
+  b.y += overlap*ny/2;
 }
 
-// UPDATE
+// ----------------- UPDATE -----------------
 function update(){
   balls.forEach(b=>{
     b.x += b.dx;
     b.y += b.dy;
-
-    // friction
     b.dx *= 0.985;
     b.dy *= 0.985;
-
     if(Math.abs(b.dx)<0.05) b.dx=0;
     if(Math.abs(b.dy)<0.05) b.dy=0;
 
-    // 🔥 REALISTIC RAIL BOUNCE
-    if(b.x < b.r){
-      b.x = b.r;
-      b.dx *= -0.9;
-    }
-    if(b.x > canvas.width - b.r){
-      b.x = canvas.width - b.r;
-      b.dx *= -0.9;
-    }
-    if(b.y < b.r){
-      b.y = b.r;
-      b.dy *= -0.9;
-    }
-    if(b.y > canvas.height - b.r){
-      b.y = canvas.height - b.r;
-      b.dy *= -0.9;
-    }
+    // Rails
+    if(b.x < b.r){ b.x=b.r; b.dx*=-0.9; }
+    if(b.x > canvas.width - b.r){ b.x=canvas.width-b.r; b.dx*=-0.9; }
+    if(b.y < b.r){ b.y=b.r; b.dy*=-0.9; }
+    if(b.y > canvas.height - b.r){ b.y=canvas.height-b.r; b.dy*=-0.9; }
 
-    // pockets
+    // Pockets
     pockets.forEach(p=>{
-      if(dist(b,p) < 24){
-
-        if(b.id === 0){
-          // cue ball reset
-          b.x = canvas.width*0.25;
-          b.y = canvas.height/2;
-          b.dx = 0;
-          b.dy = 0;
-          return;
+      if(!b.potted && dist(b,p) < 24){
+        if(b.id===0){
+          b.x=canvas.width*0.25; b.y=canvas.height/2; b.dx=0; b.dy=0; return;
         }
-
-        b.x = -100;
-        b.y = -100;
-        b.dx = b.dy = 0;
-
+        b.x=-100; b.y=-100; b.dx=0; b.dy=0;
+        b.potted = true;
         score++;
         scoreBoard.innerText = "Score: " + score;
       }
     });
   });
 
-  // collisions
+  // Ball collisions
   for(let i=0;i<balls.length;i++){
     for(let j=i+1;j<balls.length;j++){
       resolveCollision(balls[i], balls[j]);
@@ -245,7 +163,7 @@ function update(){
 }
 update();
 
-// DRAW
+// ----------------- DRAW -----------------
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -273,84 +191,54 @@ function draw(){
     let dx = pointer.x - balls[0].x;
     let dy = pointer.y - balls[0].y;
     let angle = Math.atan2(dy,dx);
-
     ctx.beginPath();
     ctx.moveTo(balls[0].x, balls[0].y);
-    ctx.lineTo(
-      balls[0].x + Math.cos(angle)*300,
-      balls[0].y + Math.sin(angle)*300
-    );
+    ctx.lineTo(balls[0].x + Math.cos(angle)*300, balls[0].y + Math.sin(angle)*300);
     ctx.strokeStyle="white";
     ctx.lineWidth=2;
     ctx.stroke();
   }
 }
 
-// INPUT
+// ----------------- INPUT -----------------
 function getPos(e){
   const rect = canvas.getBoundingClientRect();
-  if(e.touches){
-    return {
-      x:e.touches[0].clientX - rect.left,
-      y:e.touches[0].clientY - rect.top
-    };
-  }
-  return {
-    x:e.clientX - rect.left,
-    y:e.clientY - rect.top
-  };
+  if(e.touches) return { x:e.touches[0].clientX-rect.left, y:e.touches[0].clientY-rect.top };
+  return { x:e.clientX-rect.left, y:e.clientY-rect.top };
 }
 
 canvas.addEventListener('mousedown', e=>{
   if(!ballsStopped()) return;
-  aiming=true;
-  power=0;
-  pointer=getPos(e);
+  aiming=true; power=0; pointer=getPos(e);
 });
-
-canvas.addEventListener('mousemove', e=>{
-  if(aiming) pointer=getPos(e);
-});
-
+canvas.addEventListener('mousemove', e=>{ if(aiming) pointer=getPos(e); });
 canvas.addEventListener('mouseup', shoot);
-
-canvas.addEventListener('touchstart', e=>{
-  if(!ballsStopped()) return;
-  aiming=true;
-  power=0;
-  pointer=getPos(e);
-});
-
-canvas.addEventListener('touchmove', e=>{
-  pointer=getPos(e);
-});
-
+canvas.addEventListener('touchstart', e=>{ if(!ballsStopped()) return; aiming=true; power=0; pointer=getPos(e); });
+canvas.addEventListener('touchmove', e=>{ pointer=getPos(e); });
 canvas.addEventListener('touchend', shoot);
 
-// SHOOT
+// ----------------- SHOOT -----------------
 function shoot(){
   if(!aiming) return;
   aiming=false;
 
   let dx = pointer.x - balls[0].x;
   let dy = pointer.y - balls[0].y;
-
   let dist = Math.hypot(dx,dy);
   if(dist===0) return;
 
   let nx = dx/dist;
   let ny = dy/dist;
-
-  let strength = power * 0.25;
+  let strength = power*0.25;
 
   balls[0].dx = nx * strength;
   balls[0].dy = ny * strength;
 
-  power = 0;
-  powerFill.style.width = "0%";
+  power=0;
+  powerFill.style.width="0%";
 }
 
-// POWER BUILD
+// ----------------- POWER BUILD -----------------
 setInterval(()=>{
   if(aiming){
     power = Math.min(power+1.2, maxPower);
@@ -358,11 +246,8 @@ setInterval(()=>{
   }
 },16);
 
-// SHARE
-document.getElementById('shareBtn').onclick=()=>{
-  prompt("Send this to your friend:", window.location.href);
-};
+// ----------------- SHARE -----------------
+document.getElementById('shareBtn').onclick=()=>{ prompt("Send this to your friend:", window.location.href); };
 </script>
-
 </body>
 </html>
