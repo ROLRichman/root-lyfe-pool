@@ -3,175 +3,267 @@
 <head>
 <meta charset="UTF-8">
 <title>Root Lyfe Pool 🎱</title>
+
 <style>
-html, body { margin:0; padding:0; background:#222; height:100%; }
-#gameContainer { position:relative; width:100%; max-width:900px; margin:auto; }
-#poolCanvas { width:100%; height:auto; display:block; background:#35654d; border:2px solid #222; }
-#scoreBoard { color:#fff; text-align:center; margin:10px 0; font-family:sans-serif; font-size:18px; }
-#powerBar { width:80%; height:15px; background:#444; margin:10px auto; border-radius:5px; overflow:hidden; }
-#powerFill { width:0%; height:100%; background:#ff0; }
-button { padding:8px 16px; margin:5px; font-size:16px; cursor:pointer; }
+html, body {
+  margin:0;
+  padding:0;
+  background:#0b0f1a;
+  font-family:Arial;
+}
+
+#gameContainer {
+  width:100%;
+  max-width:1000px;
+  margin:auto;
+  text-align:center;
+}
+
+canvas {
+  width:100%;
+  display:block;
+  border-radius:12px;
+  background:#2e6f57;
+}
+
+#scoreBoard {
+  color:white;
+  margin:10px;
+  font-size:18px;
+}
+
+#powerBar {
+  width:80%;
+  height:12px;
+  background:#333;
+  margin:10px auto;
+  border-radius:6px;
+  overflow:hidden;
+}
+
+#powerFill {
+  height:100%;
+  width:0%;
+  background:#22c55e;
+}
+
+button {
+  padding:10px 20px;
+  margin:10px;
+  border:none;
+  border-radius:8px;
+  background:#22c55e;
+  font-weight:bold;
+  cursor:pointer;
+}
 </style>
 </head>
+
 <body>
+
 <div id="gameContainer">
   <canvas id="poolCanvas"></canvas>
   <div id="scoreBoard">Score: 0</div>
   <div id="powerBar"><div id="powerFill"></div></div>
-  <div style="text-align:center;">
-    <button id="shareBtn">Challenge a Friend</button>
-  </div>
+  <button id="shareBtn">Challenge a Friend</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/uuid@9.0.0/dist/umd/uuidv4.min.js"></script>
 <script>
 const canvas = document.getElementById('poolCanvas');
 const ctx = canvas.getContext('2d');
+
 const scoreBoard = document.getElementById('scoreBoard');
 const powerFill = document.getElementById('powerFill');
 const shareBtn = document.getElementById('shareBtn');
 
 let balls = [];
 let pockets = [];
-let mouse = {x:0, y:0};
-let isAiming = false;
+let mouse = {x:0,y:0};
+let aiming = false;
 let power = 0;
+let maxPower = 25;
 let score = 0;
 
-// Resize canvas to container
+// 🔥 RESPONSIVE CANVAS (FIXED PERFECTLY)
 function resizeCanvas(){
-  canvas.width = canvas.parentElement.offsetWidth;
-  canvas.height = canvas.width * 0.5;
+  const w = canvas.parentElement.offsetWidth;
+  const h = window.innerHeight * 0.75;
+
+  canvas.width = w;
+  canvas.height = Math.min(w * 0.8, h);
 }
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', ()=>{ resizeCanvas(); initGame(); });
 resizeCanvas();
 
-// Initialize balls and pockets
+// 🎱 INIT GAME
 function initGame(){
-  balls = [{x:150, y:canvas.height/2, dx:0, dy:0, color:'white', number:0}];
-  const colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
-  for(let i=0;i<8;i++){
-    balls.push({x:500+i*15, y:canvas.height/2, dx:0, dy:0, color:colors[i], number:i+1});
+  balls = [];
+
+  // cue ball
+  balls.push({x:150, y:canvas.height/2, dx:0, dy:0, color:'white', r:10, id:0});
+
+  // rack
+  let colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
+  let startX = canvas.width * 0.7;
+  let startY = canvas.height/2;
+
+  let index = 0;
+  for(let row=0; row<4; row++){
+    for(let col=0; col<=row; col++){
+      balls.push({
+        x:startX + row*20,
+        y:startY - row*10 + col*20,
+        dx:0,
+        dy:0,
+        color:colors[index % colors.length],
+        r:10,
+        id:index+1
+      });
+      index++;
+    }
   }
+
   pockets = [
-    {x:0, y:0}, {x:canvas.width/2, y:0}, {x:canvas.width, y:0},
-    {x:0, y:canvas.height}, {x:canvas.width/2, y:canvas.height}, {x:canvas.width, y:canvas.height}
+    {x:0,y:0},{x:canvas.width/2,y:0},{x:canvas.width,y:0},
+    {x:0,y:canvas.height},{x:canvas.width/2,y:canvas.height},{x:canvas.width,y:canvas.height}
   ];
 }
 initGame();
 
-// Distance helper
-function distance(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+// helper
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
 
-// Collision
-function handleCollisions(){
+// 🎯 COLLISION (SMOOTH + CONTROLLED)
+function collisions(){
   for(let i=0;i<balls.length;i++){
     for(let j=i+1;j<balls.length;j++){
-      let b1=balls[i], b2=balls[j];
-      let dist=distance(b1,b2);
-      if(dist<12*2){
-        let angle=Math.atan2(b2.y-b1.y, b2.x-b1.x);
-        let totalV=Math.hypot(b1.dx-b2.dx,b1.dy-b2.dy);
-        b1.dx=-totalV*Math.cos(angle)*0.9;
-        b1.dy=-totalV*Math.sin(angle)*0.9;
-        b2.dx=totalV*Math.cos(angle)*0.9;
-        b2.dy=totalV*Math.sin(angle)*0.9;
+      let a = balls[i], b = balls[j];
+      let d = dist(a,b);
+
+      if(d < a.r + b.r){
+        let angle = Math.atan2(b.y-a.y, b.x-a.x);
+        let force = 0.4;
+
+        let vx = Math.cos(angle)*force;
+        let vy = Math.sin(angle)*force;
+
+        a.dx -= vx;
+        a.dy -= vy;
+        b.dx += vx;
+        b.dy += vy;
       }
     }
   }
 }
 
-// Draw
+// 🎨 DRAW
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // table
+  ctx.fillStyle="#2e6f57";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
   // pockets
   pockets.forEach(p=>{
     ctx.beginPath();
-    ctx.arc(p.x,p.y,20,0,Math.PI*2);
-    ctx.fillStyle='black';
+    ctx.arc(p.x,p.y,18,0,Math.PI*2);
+    ctx.fillStyle="black";
     ctx.fill();
-    ctx.closePath();
   });
+
   // balls
-  balls.forEach(ball=>{
+  balls.forEach(b=>{
     ctx.beginPath();
-    ctx.arc(ball.x,ball.y,12,0,Math.PI*2);
-    ctx.fillStyle=ball.color;
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fillStyle=b.color;
     ctx.fill();
-    ctx.strokeStyle='black';
-    ctx.stroke();
-    ctx.closePath();
   });
-  // cue line
-  if(isAiming){
+
+  // aim line
+  if(aiming){
     ctx.beginPath();
     ctx.moveTo(balls[0].x, balls[0].y);
     ctx.lineTo(mouse.x, mouse.y);
-    ctx.strokeStyle='white';
-    ctx.lineWidth=4;
+    ctx.strokeStyle="white";
+    ctx.lineWidth=2;
     ctx.stroke();
   }
 }
 
-// Update physics
+// ⚙️ PHYSICS ENGINE (REALISTIC)
 function update(){
-  balls.forEach(ball=>{
-    ball.x += ball.dx;
-    ball.y += ball.dy;
-    ball.dx *=0.98;
-    ball.dy *=0.98;
-    // wall bounce
-    if(ball.x<12 || ball.x>canvas.width-12) ball.dx*=-1;
-    if(ball.y<12 || ball.y>canvas.height-12) ball.dy*=-1;
+  balls.forEach(b=>{
+    b.x += b.dx;
+    b.y += b.dy;
+
+    // friction
+    b.dx *= 0.96;
+    b.dy *= 0.96;
+
+    if(Math.abs(b.dx)<0.05) b.dx=0;
+    if(Math.abs(b.dy)<0.05) b.dy=0;
+
+    // walls
+    if(b.x < b.r || b.x > canvas.width - b.r) b.dx *= -0.8;
+    if(b.y < b.r || b.y > canvas.height - b.r) b.dy *= -0.8;
+
     // pockets
     pockets.forEach(p=>{
-      if(distance(ball,p)<20 && ball.number!==0){
-        ball.x=-100; ball.y=-100; ball.dx=0; ball.dy=0;
+      if(dist(b,p)<18 && b.id!==0){
+        b.x=-100; b.y=-100;
+        b.dx=b.dy=0;
         score++;
-        scoreBoard.innerText = "Score: "+score;
-        // TODO: send score to leaderboard backend
+        scoreBoard.innerText="Score: "+score;
       }
     });
   });
-  handleCollisions();
+
+  collisions();
   draw();
   requestAnimationFrame(update);
 }
 update();
 
-// Mouse / touch
+// 🎮 CONTROLS (SMOOTH POWER SYSTEM)
 canvas.addEventListener('mousemove', e=>{
   const rect = canvas.getBoundingClientRect();
-  mouse.x=e.clientX-rect.left;
-  mouse.y=e.clientY-rect.top;
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
 });
-canvas.addEventListener('mousedown', ()=>{ isAiming=true; power=0; });
+
+canvas.addEventListener('mousedown', ()=>{
+  aiming = true;
+  power = 0;
+});
+
 canvas.addEventListener('mouseup', ()=>{
-  isAiming=false;
+  aiming = false;
+
   let dx = balls[0].x - mouse.x;
   let dy = balls[0].y - mouse.y;
-  balls[0].dx = dx*0.02*power;
-  balls[0].dy = dy*0.02*power;
-  power=0;
+  let angle = Math.atan2(dy, dx);
+
+  balls[0].dx = Math.cos(angle) * power * 0.5;
+  balls[0].dy = Math.sin(angle) * power * 0.5;
+
+  power = 0;
   powerFill.style.width="0%";
 });
-canvas.addEventListener('mousemove', ()=>{
-  if(isAiming){
-    power = Math.min(power+1,100);
-    powerFill.style.width=power+"%";
+
+// hold to charge
+setInterval(()=>{
+  if(aiming){
+    power = Math.min(power + 0.5, maxPower);
+    powerFill.style.width = (power/maxPower*100)+"%";
   }
-});
+},16);
 
-// Share / Challenge
+// 🔗 SHARE
 shareBtn.addEventListener('click', ()=>{
-  const roomID = uuidv4();
-  const url = `${window.location.origin}${window.location.pathname}?room=${roomID}`;
-  prompt("Share this link with a friend to play:", url);
+  prompt("Challenge a friend:", window.location.href);
 });
-
-// TODO: WebSocket / leaderboard integration
 </script>
+
 </body>
 </html>
-
-Replace old pool game with universal responsive version
