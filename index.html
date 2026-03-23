@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <title>Root Lyfe Pool 🎱 PRO</title>
 <style>
-html, body {
-  margin:0; padding:0; background:#0b0f1a; overflow:hidden; font-family:Arial;
-}
+html, body { margin:0; padding:0; background:#0b0f1a; overflow:hidden; font-family:Arial; }
 #gameContainer { width:100vw; height:100vh; position:relative; }
 canvas { width:100%; height:100%; display:block; background:#2e6f57; }
 #ui { position:absolute; top:10px; width:100%; text-align:center; color:white; }
@@ -38,6 +36,7 @@ let pointer = {x:0,y:0};
 let power = 0;
 let maxPower = 70;
 let score = 0;
+const R = 14;
 
 // ----------------- FULLSCREEN -----------------
 function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -50,20 +49,16 @@ function initGame(){
   score = 0;
   scoreBoard.innerText = "Score: " + score;
 
-  const R = 14;
-  const spacing = R*2 + 1;
-
-  // Cue ball
-  balls.push({ x: canvas.width*0.25, y: canvas.height/2, dx:0, dy:0, r:R, color:'white', id:0, potted:false });
+  // Cue ball far left for controlled break
+  balls.push({ x: canvas.width*0.15, y: canvas.height/2, dx:0, dy:0, r:R, color:'white', id:0, potted:false });
 
   // Rack colors
   const colors = ['yellow','blue','red','purple','orange','green','maroon','black'];
-
   let startX = canvas.width*0.75;
   let startY = canvas.height/2;
   let index = 0;
+  const spacing = R*2 + 2; // tiny gap to prevent overlap
 
-  // Rack layout with spacing
   for(let row=0; row<5; row++){
     for(let col=0; col<=row; col++){
       balls.push({
@@ -107,13 +102,14 @@ function resolveCollision(a,b){
   let speed = vx*nx + vy*ny;
   if(speed > 0) return;
 
-  let impulse = 1.9 * speed;
+  // Limit impulse to avoid balls flying
+  let impulse = Math.max(Math.min(1.2 * speed, 3), -3);
   a.dx -= impulse * nx;
   a.dy -= impulse * ny;
   b.dx += impulse * nx;
   b.dy += impulse * ny;
 
-  // Separate overlap
+  // separate overlap
   let overlap = a.r + b.r - distAB;
   a.x -= overlap*nx/2;
   a.y -= overlap*ny/2;
@@ -124,12 +120,9 @@ function resolveCollision(a,b){
 // ----------------- UPDATE -----------------
 function update(){
   balls.forEach(b=>{
-    b.x += b.dx;
-    b.y += b.dy;
-    b.dx *= 0.985;
-    b.dy *= 0.985;
-    if(Math.abs(b.dx)<0.05) b.dx=0;
-    if(Math.abs(b.dy)<0.05) b.dy=0;
+    b.x += b.dx; b.y += b.dy;
+    b.dx *= 0.985; b.dy *= 0.985;
+    if(Math.abs(b.dx)<0.05) b.dx=0; if(Math.abs(b.dy)<0.05) b.dy=0;
 
     // Rails
     if(b.x < b.r){ b.x=b.r; b.dx*=-0.9; }
@@ -141,12 +134,10 @@ function update(){
     pockets.forEach(p=>{
       if(!b.potted && dist(b,p) < 24){
         if(b.id===0){
-          b.x=canvas.width*0.25; b.y=canvas.height/2; b.dx=0; b.dy=0; return;
+          b.x=canvas.width*0.15; b.y=canvas.height/2; b.dx=0; b.dy=0; return;
         }
-        b.x=-100; b.y=-100; b.dx=0; b.dy=0;
-        b.potted = true;
-        score++;
-        scoreBoard.innerText = "Score: " + score;
+        b.x=-100; b.y=-100; b.dx=0; b.dy=0; b.potted=true;
+        score++; scoreBoard.innerText = "Score: "+score;
       }
     });
   });
@@ -166,9 +157,7 @@ update();
 // ----------------- DRAW -----------------
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  ctx.fillStyle="#2e6f57";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#2e6f57"; ctx.fillRect(0,0,canvas.width,canvas.height);
 
   // pockets
   pockets.forEach(p=>{
@@ -194,9 +183,7 @@ function draw(){
     ctx.beginPath();
     ctx.moveTo(balls[0].x, balls[0].y);
     ctx.lineTo(balls[0].x + Math.cos(angle)*300, balls[0].y + Math.sin(angle)*300);
-    ctx.strokeStyle="white";
-    ctx.lineWidth=2;
-    ctx.stroke();
+    ctx.strokeStyle="white"; ctx.lineWidth=2; ctx.stroke();
   }
 }
 
@@ -221,21 +208,15 @@ canvas.addEventListener('touchend', shoot);
 function shoot(){
   if(!aiming) return;
   aiming=false;
-
   let dx = pointer.x - balls[0].x;
   let dy = pointer.y - balls[0].y;
   let dist = Math.hypot(dx,dy);
   if(dist===0) return;
-
   let nx = dx/dist;
   let ny = dy/dist;
-  let strength = power*0.25;
-
-  balls[0].dx = nx * strength;
-  balls[0].dy = ny * strength;
-
-  power=0;
-  powerFill.style.width="0%";
+  let strength = power*0.2; // moderated for controlled break
+  balls[0].dx = nx*strength; balls[0].dy = ny*strength;
+  power=0; powerFill.style.width="0%";
 }
 
 // ----------------- POWER BUILD -----------------
@@ -248,6 +229,10 @@ setInterval(()=>{
 
 // ----------------- SHARE -----------------
 document.getElementById('shareBtn').onclick=()=>{ prompt("Send this to your friend:", window.location.href); };
+
+// ----------------- OPTIONAL: AUTO BREAK -----------------
+// Uncomment next line to do an automatic controlled break at start
+// setTimeout(()=>{ balls[0].dx = 15; balls[0].dy = 0; }, 500);
 </script>
 </body>
 </html>
